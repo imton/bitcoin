@@ -3,8 +3,10 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include "db.h"
 #include "main.h"
 #include "bitcoinrpc.h"
+#include "sethash.h"
 
 using namespace json_spirit;
 using namespace std;
@@ -159,7 +161,88 @@ Value getblock(const Array& params, bool fHelp)
     return blockToJSON(block, pblockindex);
 }
 
+class CPrunedOutputs
+{
+public:
+    uint256 nHash;
+    int nVersion;
+    int nHeight;
+    bool fCoinBase;
+    std::vector<CTxOut> vout;
 
+    IMPLEMENT_SERIALIZE(
+        READWRITE(nHash);
+        READWRITE(nVersion);
+        READWRITE(nHeight);
+        READWRITE(fCoinBase);
+        READWRITE(vout);
+    )
+};
 
+bool CalcTxoutSetHashes(CBlockIndex *pindexIn, uint256 &hashOut) {
+    CTxDB txdb("r");
 
+    CSetHash hash;
+    std::map<std::pair<unsigned int, unsigned int>, int> mapBlockHeight;
 
+    for (CBlockIndex *pindex = pindexBest; pindex != NULL; pindex = pindex->pprev) {
+        mapBlockHeight[std::make_pair(pindex->nFile, pindex->nBlockPos)] = pindex->nHeight;
+    }
+
+    for (CBlockIndex *pindex = pindexIn; pindex != NULL; pindex = pindex->pprev) {
+        CBlock block;
+        block.ReadFromDisk(pindex);
+        BOOST_FOREACH(const CTransaction &tx, block.vtx) {
+            uint256 hashTx = tx.GetHash();
+            CTxIndex txindex;
+            if (txdb.ReadTxIndex(hashTx, txindex)) {
+                if (txindex.pos.nFile == pindex->nFile && txindex.pos.nBlockPos == pindex->nBlockPos) {
+                    CPrunedOutputs outs;
+                    outs.nHash = hashTx;
+                    outs.nVersion = tx.nVersion;
+                    outs.nHeight = pindex->nHeight;
+                    outs.fCoinBase = tx.IsCoinBase();
+                    outs.vout = tx.vout;
+                    for (unsigned int n = 0; n < tx.vout.size(); n++) {
+                        if (!outs.vout[n].IsNull() && !txindex.vSpent[n].IsNull()) {
+                            int nSpendHeight = mapBlockHeight[std::make_pair(txindex.vSpent[n].nFile, txindex.vSpent[n].nBlockPos)];
+                            if (nSpendHeight == 0 || (nSpendHeight >= pindex->nHeight && nSpendHeight <= pindexIn->nHeight))
+                                outs.vout[n].SetNull();
+                        }
+                    }
+                    while (outs.vout.size() > 0 && outs.vout.back().IsNull())
+                        outs.vout.pop_back();
+                    if (outs.vout.size() > 0)
+                        hash.add(outs);
+                }
+            }
+        }
+        printf("txoutsethash: height %i\n", pindex->nHeight);
+    }
+
+    hashOut = hash.GetHash();
+
+    return true;
+}
+
+Value gettxoutsethash(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+            "gettxoutsethash <hash>\n"
+            "Returns hash of the unspent transaction output set at given block.");
+
+    std::string strHash = params[0].get_str();
+    uint256 hash(strHash);
+
+    if (mapBlockIndex.count(hash) == 0)
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Block not found");
+    CBlockIndex* pindex = mapBlockIndex[hash];
+
+    uint256 out;
+    if (CalcTxoutSetHashes(pindex, out)) {
+        return out.ToString();
+    }
+
+    return Value::null;
+}
