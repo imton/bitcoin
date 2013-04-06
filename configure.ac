@@ -151,7 +151,7 @@ PKG_PROG_PKG_CONFIG
 ##       compatibility with the legacy buildsystem.
 ##
 CXXFLAGS="$CXXFLAGS -Wall -Wextra -Wformat -Wformat-security -Wno-unused-parameter"
-CPPFLAGS="$CPPFLAGS -DBOOST_SPIRIT_THREADSAFE -DHAVE_BUILD_INFO"
+CPPFLAGS="$CPPFLAGS -DBOOST_SPIRIT_THREADSAFE -DHAVE_BUILD_INFO -DUSE_SECP256K1"
 
 AC_LANG_PUSH([C++])
 
@@ -336,6 +336,9 @@ AC_TRY_COMPILE([#include <sys/socket.h>],
  [ AC_MSG_RESULT(yes); AC_DEFINE(HAVE_MSG_NOSIGNAL, 1,[Define this symbol if you have MSG_NOSIGNAL]) ],
  [ AC_MSG_RESULT(no)]
 )
+
+AC_CHECK_HEADER([gmp.h],,AC_MSG_ERROR(libgmp headers missing))
+AC_CHECK_LIB([gmp], [main],, [have_gmp=no])
 
 dnl Check for libdb_cxx
 BITCOIN_FIND_BDB48

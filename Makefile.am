@@ -30,12 +30,16 @@ COVERAGE_INFO = baseline_filtered_combined.info baseline.info block_test.info \
 
 dist-hook:
 	-$(MAKE) -C $(top_distdir)/src/leveldb clean
+	-$(MAKE) -C $(top_distdir)/src/secp256k1 clean
 	-$(GIT) archive --format=tar HEAD -- src/version.cpp | $(AMTAR) -C $(top_distdir) -xf -
 
 distcheck-hook:
 	$(MKDIR_P) $(top_distdir)/_build/src/leveldb
 	cp -rf $(top_srcdir)/src/leveldb/* $(top_distdir)/_build/src/leveldb/
 	-$(MAKE) -C $(top_distdir)/_build/src/leveldb clean
+	$(MKDIR_P) $(top_distdir)/_build/src/secp256k1
+	cp -rf $(top_srcdir)/src/leveldb/* $(top_distdir)/_build/src/secp256k1/
+	-$(MAKE) -C $(top_distdir)/_build/src/secp256k1 clean
 
 distcleancheck:
 	@:

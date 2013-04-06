@@ -20,7 +20,7 @@ test_bitcoin_qt_SOURCES = test_main.cpp uritests.cpp paymentservertests.cpp $(TE
 nodist_test_bitcoin_qt_SOURCES = $(TEST_QT_MOC_CPP)
 test_bitcoin_qt_LDADD = $(LIBBITCOINQT) $(LIBBITCOIN) $(LIBLEVELDB) \
   $(LIBMEMENV) $(BOOST_LIBS) $(QT_LIBS) $(QT_DBUS_LIBS) $(QT_TEST_LIBS) \
-  $(QR_LIBS) $(PROTOBUF_LIBS) $(BDB_LIBS)
+  $(QR_LIBS) $(PROTOBUF_LIBS) $(BDB_LIBS) $(LIBSECP256K1)
 
 CLEANFILES = $(BUILT_SOURCES) *.gcda *.gcno
 

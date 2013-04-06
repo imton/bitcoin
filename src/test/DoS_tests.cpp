@@ -252,29 +252,8 @@ BOOST_AUTO_TEST_CASE(DoS_checkSig)
         tx.vin[j].prevout.n = 0;
         tx.vin[j].prevout.hash = orphans[j].GetHash();
     }
-    // Creating signatures primes the cache:
-    boost::posix_time::ptime mst1 = boost::posix_time::microsec_clock::local_time();
     for (unsigned int j = 0; j < tx.vin.size(); j++)
         BOOST_CHECK(SignSignature(keystore, orphans[j], tx, j));
-    boost::posix_time::ptime mst2 = boost::posix_time::microsec_clock::local_time();
-    boost::posix_time::time_duration msdiff = mst2 - mst1;
-    long nOneValidate = msdiff.total_milliseconds();
-    if (fDebug) printf("DoS_Checksig sign: %ld\n", nOneValidate);
-
-    // ... now validating repeatedly should be quick:
-    // 2.8GHz machine, -g build: Sign takes ~760ms,
-    // uncached Verify takes ~250ms, cached Verify takes ~50ms
-    // (for 100 single-signature inputs)
-    mst1 = boost::posix_time::microsec_clock::local_time();
-    for (unsigned int i = 0; i < 5; i++)
-        for (unsigned int j = 0; j < tx.vin.size(); j++)
-            BOOST_CHECK(VerifySignature(CCoins(orphans[j], MEMPOOL_HEIGHT), tx, j, flags, SIGHASH_ALL));
-    mst2 = boost::posix_time::microsec_clock::local_time();
-    msdiff = mst2 - mst1;
-    long nManyValidate = msdiff.total_milliseconds();
-    if (fDebug) printf("DoS_Checksig five: %ld\n", nManyValidate);
-
-    BOOST_CHECK_MESSAGE(nManyValidate < nOneValidate, "Signature cache timing failed");
 
     // Empty a signature, validation should fail:
     CScript save = tx.vin[0].scriptSig;

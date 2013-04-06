@@ -1,6 +1,7 @@
 include Makefile.include
 AM_CPPFLAGS =  $(INCLUDES) -I$(top_builddir)/src/obj \
   -I$(top_srcdir)/src/leveldb/include -I$(top_srcdir)/src/leveldb/helpers \
+  -I$(top_srcdir)/src/secp256k1/include \
   -I$(builddir) $(BOOST_INCLUDES) $(BDB_CPPFLAGS)
 AM_LDFLAGS = $(PTHREAD_CFLAGS)
 
@@ -44,6 +45,7 @@ nodist_libbitcoin_a_SOURCES = $(top_srcdir)/src/obj/build.h
 
 # bitcoind binary #
 bitcoind_LDADD = libbitcoin.a leveldb/libleveldb.a leveldb/libmemenv.a \
+  secp256k1/libsecp256k1.a \
   $(BOOST_LIBS)
 bitcoind_SOURCES = bitcoind.cpp
 #
@@ -57,6 +59,7 @@ bitcoind_LDADD += $(BDB_LIBS)
 
 # bitcoin-cli binary #
 bitcoin_cli_LDADD = libbitcoin.a leveldb/libleveldb.a leveldb/libmemenv.a \
+  secp256k1/libsecp256k1.a \
   $(BOOST_LIBS)
 bitcoin_cli_SOURCES = bitcoin-cli.cpp
 #
@@ -73,17 +76,23 @@ leveldb/%.a:
 	  CC="$(CC)" PLATFORM=$(TARGET_OS) AR="$(AR)" $(LEVELDB_TARGET_FLAGS) \
 	  OPT="$(CXXFLAGS) $(CPPFLAGS)"
 
+secp256k1/libsecp256k1.a:
+	@echo "Building libsecp256k1 ..." && cd $(@D) && rm -f config.mk && CC="$(CC)" ./configure && \
+	 $(MAKE) $(@F)
+
 qt/bitcoinstrings.cpp: $(libbitcoin_a_SOURCES)
 	@test -n $(XGETTEXT) || echo "xgettext is required for updating translations"
 	@cd $(top_srcdir); XGETTEXT=$(XGETTEXT) share/qt/extract_strings_qt.py
 
-CLEANFILES = leveldb/libleveldb.a leveldb/libmemenv.a *.gcda *.gcno
+
+CLEANFILES = leveldb/libleveldb.a leveldb/libmemenv.a secp256k1/libsecp256k1.a *.gcda *.gcno
 
 DISTCLEANFILES = obj/build.h
 
-EXTRA_DIST = leveldb Makefile.include
+EXTRA_DIST = leveldb secp256k1 Makefile.include
 
 clean-local:
 	-$(MAKE) -C leveldb clean
+	-$(MAKE) -C secp256k1 clean
 	rm -f leveldb/port/*.gcno leveldb/db/*.gcno leveldb/table/*.gcno leveldb/helpers/*.gcno
 	rm -f leveldb/util/*.gcno leveldb/helpers/memenv/*.gcno
