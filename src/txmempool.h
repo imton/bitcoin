@@ -6,6 +6,10 @@
 #define BITCOIN_TXMEMPOOL_H
 
 #include "core.h"
+#include "coins.h"
+
+/** Fake height value used in CCoins to signify they are only in the memory pool (since 0.8) */
+static const unsigned int MEMPOOL_HEIGHT = 0x7FFFFFFF;
 
 /*
  * CTxMemPool stores valid-according-to-the-current-best-chain
@@ -36,8 +40,7 @@ public:
      * all inputs are in the mapNextTx array). If sanity-checking is turned off,
      * check does nothing.
      */
-    typedef CCoins& (*CoinLookupFunc)(const uint256&);
-    void check(CoinLookupFunc fnLookup) const;
+    void check(CCoinsViewCache *pcoins) const;
     void setSanityCheck(bool _fSanityCheck) { fSanityCheck = _fSanityCheck; }
 
     bool addUnchecked(const uint256& hash, const CTransaction &tx);
@@ -62,6 +65,19 @@ public:
     }
 
     bool lookup(uint256 hash, CTransaction& result) const;
+};
+
+/** CCoinsView that brings transactions from a memorypool into view.
+    It does not check for spendings by memory pool transactions. */
+class CCoinsViewMemPool : public CCoinsViewBacked
+{
+protected:
+    CTxMemPool &mempool;
+
+public:
+    CCoinsViewMemPool(CCoinsView &baseIn, CTxMemPool &mempoolIn);
+    bool GetCoins(const uint256 &txid, CCoins &coins);
+    bool HaveCoins(const uint256 &txid);
 };
 
 #endif /* BITCOIN_TXMEMPOOL_H */

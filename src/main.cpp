@@ -226,128 +226,6 @@ CBlockIndex *CChain::FindFork(const CBlockLocator &locator) const {
     return Genesis();
 }
 
-//////////////////////////////////////////////////////////////////////////////
-//
-// CCoinsView implementations
-//
-
-bool CCoinsView::GetCoins(const uint256 &txid, CCoins &coins) { return false; }
-bool CCoinsView::SetCoins(const uint256 &txid, const CCoins &coins) { return false; }
-bool CCoinsView::HaveCoins(const uint256 &txid) { return false; }
-uint256 CCoinsView::GetBestBlock() { return uint256(0); }
-bool CCoinsView::SetBestBlock(const uint256 &hashBlock) { return false; }
-bool CCoinsView::BatchWrite(const std::map<uint256, CCoins> &mapCoins, const uint256 &hashBlock) { return false; }
-bool CCoinsView::GetStats(CCoinsStats &stats) { return false; }
-
-
-CCoinsViewBacked::CCoinsViewBacked(CCoinsView &viewIn) : base(&viewIn) { }
-bool CCoinsViewBacked::GetCoins(const uint256 &txid, CCoins &coins) { return base->GetCoins(txid, coins); }
-bool CCoinsViewBacked::SetCoins(const uint256 &txid, const CCoins &coins) { return base->SetCoins(txid, coins); }
-bool CCoinsViewBacked::HaveCoins(const uint256 &txid) { return base->HaveCoins(txid); }
-uint256 CCoinsViewBacked::GetBestBlock() { return base->GetBestBlock(); }
-bool CCoinsViewBacked::SetBestBlock(const uint256 &hashBlock) { return base->SetBestBlock(hashBlock); }
-void CCoinsViewBacked::SetBackend(CCoinsView &viewIn) { base = &viewIn; }
-bool CCoinsViewBacked::BatchWrite(const std::map<uint256, CCoins> &mapCoins, const uint256 &hashBlock) { return base->BatchWrite(mapCoins, hashBlock); }
-bool CCoinsViewBacked::GetStats(CCoinsStats &stats) { return base->GetStats(stats); }
-
-CCoinsViewCache::CCoinsViewCache(CCoinsView &baseIn, bool fDummy) : CCoinsViewBacked(baseIn), hashBlock(0) { }
-
-bool CCoinsViewCache::GetCoins(const uint256 &txid, CCoins &coins) {
-    if (cacheCoins.count(txid)) {
-        coins = cacheCoins[txid];
-        return true;
-    }
-    if (base->GetCoins(txid, coins)) {
-        cacheCoins[txid] = coins;
-        return true;
-    }
-    return false;
-}
-
-std::map<uint256,CCoins>::iterator CCoinsViewCache::FetchCoins(const uint256 &txid) {
-    std::map<uint256,CCoins>::iterator it = cacheCoins.lower_bound(txid);
-    if (it != cacheCoins.end() && it->first == txid)
-        return it;
-    CCoins tmp;
-    if (!base->GetCoins(txid,tmp))
-        return cacheCoins.end();
-    std::map<uint256,CCoins>::iterator ret = cacheCoins.insert(it, std::make_pair(txid, CCoins()));
-    tmp.swap(ret->second);
-    return ret;
-}
-
-CCoins &CCoinsViewCache::GetCoins(const uint256 &txid) {
-    std::map<uint256,CCoins>::iterator it = FetchCoins(txid);
-    assert(it != cacheCoins.end());
-    return it->second;
-}
-
-bool CCoinsViewCache::SetCoins(const uint256 &txid, const CCoins &coins) {
-    cacheCoins[txid] = coins;
-    return true;
-}
-
-bool CCoinsViewCache::HaveCoins(const uint256 &txid) {
-    return FetchCoins(txid) != cacheCoins.end();
-}
-
-uint256 CCoinsViewCache::GetBestBlock() {
-    if (hashBlock == uint256(0))
-        hashBlock = base->GetBestBlock();
-    return hashBlock;
-}
-
-bool CCoinsViewCache::SetBestBlock(const uint256 &hashBlockIn) {
-    hashBlock = hashBlockIn;
-    return true;
-}
-
-bool CCoinsViewCache::BatchWrite(const std::map<uint256, CCoins> &mapCoins, const uint256 &hashBlockIn) {
-    for (std::map<uint256, CCoins>::const_iterator it = mapCoins.begin(); it != mapCoins.end(); it++)
-        cacheCoins[it->first] = it->second;
-    hashBlock = hashBlockIn;
-    return true;
-}
-
-bool CCoinsViewCache::Flush() {
-    bool fOk = base->BatchWrite(cacheCoins, hashBlock);
-    if (fOk)
-        cacheCoins.clear();
-    return fOk;
-}
-
-unsigned int CCoinsViewCache::GetCacheSize() {
-    return cacheCoins.size();
-}
-
-/** Helper; lookup from tip (used calling mempool.check()
-    NOTE: code calling this MUST hold the cs_main lock so
-    another thread doesn't modify pcoinsTip. When we switch
-    to C++11 this should be replaced by lambda expressions...
- **/
-static CCoins &LookupFromTip(const uint256& hash) {
-    return pcoinsTip->GetCoins(hash);
-}
-
-/** CCoinsView that brings transactions from a memorypool into view.
-    It does not check for spendings by memory pool transactions. */
-CCoinsViewMemPool::CCoinsViewMemPool(CCoinsView &baseIn, CTxMemPool &mempoolIn) : CCoinsViewBacked(baseIn), mempool(mempoolIn) { }
-
-bool CCoinsViewMemPool::GetCoins(const uint256 &txid, CCoins &coins) {
-    if (base->GetCoins(txid, coins))
-        return true;
-    CTransaction tx;
-    if (mempool.lookup(txid, tx)) {
-        coins = CCoins(tx, MEMPOOL_HEIGHT);
-        return true;
-    }
-    return false;
-}
-
-bool CCoinsViewMemPool::HaveCoins(const uint256 &txid) {
-    return mempool.exists(txid) || base->HaveCoins(txid);
-}
-
 CCoinsViewCache *pcoinsTip = NULL;
 CBlockTreeDB *pblocktree = NULL;
 
@@ -1839,7 +1717,7 @@ bool ConnectBlock(CBlock& block, CValidationState& state, CBlockIndex* pindex, C
 
 bool SetBestChain(CValidationState &state, CBlockIndex* pindexNew)
 {
-    mempool.check(&LookupFromTip);
+    mempool.check(pcoinsTip);
 
     // All modifications to the coin state will be done in this cache.
     // Only when all have succeeded, we push it to pcoinsTip.
@@ -1964,7 +1842,7 @@ bool SetBestChain(CValidationState &state, CBlockIndex* pindexNew)
         mempool.removeConflicts(tx);
     }
 
-    mempool.check(&LookupFromTip);
+    mempool.check(pcoinsTip);
 
     // Update best block in wallet (so we can detect restored wallets)
     if ((pindexNew->nHeight % 20160) == 0 || (!fIsInitialDownload && (pindexNew->nHeight % 144) == 0))
@@ -3542,7 +3420,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv)
         CValidationState state;
         if (AcceptToMemoryPool(mempool, state, tx, true, &fMissingInputs))
         {
-            mempool.check(&LookupFromTip);
+            mempool.check(pcoinsTip);
             RelayTransaction(tx, inv.hash);
             mapAlreadyAskedFor.erase(inv);
             vWorkQueue.push_back(inv.hash);
@@ -3578,7 +3456,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv)
                         vEraseQueue.push_back(orphanHash);
                         LogPrint("mempool", "   removed orphan tx %s\n", orphanHash.ToString().c_str());
                     }
-                    mempool.check(&LookupFromTip);
+                    mempool.check(pcoinsTip);
                 }
             }
 
