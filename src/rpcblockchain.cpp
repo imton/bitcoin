@@ -9,6 +9,8 @@
 #include "main.h"
 #include "sync.h"
 
+#include "rpcrawtransaction.cpp"
+
 #include <stdint.h>
 
 #include "json/json_spirit_value.h"
@@ -174,8 +176,19 @@ Value getrawmempool(const Array& params, bool fHelp)
 
     Array a;
     BOOST_FOREACH(const uint256& hash, vtxid)
-        a.push_back(hash.ToString());
-
+    {
+    	CTransaction tx;
+	uint256 hashBlock = 0;
+	if(GetTransaction(hash, tx, hashBlock, true)){
+    		CDataStream ssTx(SER_NETWORK, PROTOCOL_VERSION);
+   		ssTx << tx;
+   		string strHex = HexStr(ssTx.begin(), ssTx.end());
+    		Object result;
+    		result.push_back(Pair("hex", strHex));
+    		TxToJSON(tx, hashBlock, result);
+		a.push_back(  result  );
+	}
+    }
     return a;
 }
 
