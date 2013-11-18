@@ -12,6 +12,15 @@
 #include <leveldb/filter_policy.h>
 #include <memenv.h>
 
+
+CLevelDBIterator::~CLevelDBIterator() { delete piter; }
+bool CLevelDBIterator::Valid() { return piter->Valid(); }
+void CLevelDBIterator::SeekToFirst() { piter->SeekToFirst(); }
+void CLevelDBIterator::SeekToLast() { piter->SeekToLast(); }
+void CLevelDBIterator::Next() { piter->Next(); }
+void CLevelDBIterator::Prev() { piter->Prev(); }
+
+
 void HandleError(const leveldb::Status &status) throw(leveldb_error) {
     if (status.ok())
         return;
@@ -35,14 +44,7 @@ static leveldb::Options GetOptions(size_t nCacheSize) {
     return options;
 }
 
-CLevelDBIterator::~CLevelDBIterator() { delete piter; }
-bool CLevelDBIterator::Valid() { return piter->Valid(); }
-void CLevelDBIterator::SeekToFirst() { piter->SeekToFirst(); }
-void CLevelDBIterator::SeekToLast() { piter->SeekToLast(); }
-void CLevelDBIterator::Next() { piter->Next(); }
-void CLevelDBIterator::Prev() { piter->Prev(); }
-
-CLevelDB::CLevelDB(const boost::filesystem::path &path, size_t nCacheSize, bool fMemory, bool fWipe) {
+CLevelDBWrapper::CLevelDBWrapper(const boost::filesystem::path &path, size_t nCacheSize, bool fMemory, bool fWipe) {
     penv = NULL;
     readoptions.verify_checksums = true;
     iteroptions.verify_checksums = true;

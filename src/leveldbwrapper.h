@@ -54,7 +54,8 @@ public:
     }
 };
 
-<<<<<<< HEAD:src/leveldb.h
+
+
 class CLevelDBIterator
 {
 private:
@@ -112,7 +113,8 @@ public:
 
 };
 
-class CLevelDB
+
+class CLevelDBWrapper
 {
 private:
     // custom environment this database is using (may be NULL in case of default environment)
@@ -204,9 +206,15 @@ public:
         return WriteBatch(batch, true);
     }
 
+    // not exactly clean encapsulation, but it's easiest for now
+    //leveldb::Iterator *NewIterator() {
+      //  return pdb->NewIterator(iteroptions);
+    //}
+
     CLevelDBIterator *NewIterator() {
         return new CLevelDBIterator(pdb->NewIterator(iteroptions));
     }
+
 };
 
 #endif // BITCOIN_LEVELDBWRAPPER_H

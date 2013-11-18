@@ -7,6 +7,7 @@
 
 #include "core.h"
 #include "uint256.h"
+//#include "uint64.h"
 
 #include <stdint.h>
 
@@ -65,12 +66,16 @@ bool CCoinsViewDB::BatchWrite(const std::map<uint256, CCoins> &mapCoins, const u
     return db.WriteBatch(batch);
 }
 
-CBlockTreeDB::CBlockTreeDB(size_t nCacheSize, bool fMemory, bool fWipe) : CLevelDB(GetDataDir() / "blocks" / "index", nCacheSize, fMemory, fWipe) {
+CBlockTreeDB::CBlockTreeDB(size_t nCacheSize, bool fMemory, bool fWipe) : CLevelDBWrapper(GetDataDir() / "blocks" / "index", nCacheSize, fMemory, fWipe) {
+
     if (!Read('S', salt)) {
         salt = GetRandHash();
         Write('S', salt);
     }
+
 }
+
+
 
 bool CBlockTreeDB::WriteBlockIndex(const CDiskBlockIndex& blockindex)
 {
@@ -122,10 +127,10 @@ bool CCoinsViewDB::GetStats(CCoinsStats &stats) {
     while (pcursor->Valid()) {
         boost::this_thread::interruption_point();
         std::pair<char, uint256> key;
-        CCoins coins;
-        if (pcursor->GetKey(key) && key.first == 'c') {
-            if (pcursor->GetValue(coins)) {
-                stats.nTransactions++;
+	CCoins coins;
+	if (pcursor->GetKey(key) && key.first == 'c') {
+	    if (pcursor->GetValue(coins)) {
+		stats.nTransactions++;
                 for (unsigned int i=0; i<coins.vout.size(); i++) {
                     const CTxOut &out = coins.vout[i];
                     if (!out.IsNull()) {
@@ -135,21 +140,22 @@ bool CCoinsViewDB::GetStats(CCoinsStats &stats) {
                         nTotalAmount += out.nValue;
                     }
                 }
-                stats.nSerializedSize += 32 + pcursor->GetKeySize();
+		stats.nSerializedSize += 32 + pcursor->GetKeySize();
                 ss << VARINT(0);
             } else {
-                return error("CCoinsViewDB::GetStats() : unable to read value");
-            }
-        } else {
-            break;
-        }
-        pcursor->Next();
+		return error("CCoinsViewDB::GetStats() : unable to read value");
+	    }
+        } else{
+		break;
+	}
+	pcursor->Next();
     }
     delete pcursor;
     stats.nHeight = mapBlockIndex.find(GetBestBlock())->second->nHeight;
     stats.hashSerialized = ss.GetHash();
     stats.nTotalAmount = nTotalAmount;
     return true;
+
 }
 
 bool CBlockTreeDB::ReadTxIndex(const uint256 &txid, CDiskTxPos &pos) {
@@ -163,9 +169,11 @@ bool CBlockTreeDB::WriteTxIndex(const std::vector<std::pair<uint256, CDiskTxPos>
     return WriteBatch(batch);
 }
 
+
+
 bool CBlockTreeDB::ReadAddrIndex(uint160 addrid, std::vector<CExtDiskTxPos> &list) {
     CLevelDBIterator *iter = NewIterator();
-    uint64 lookupid;
+    uint64_t lookupid;
     {
         CHashWriter ss(SER_GETHASH, 0);
         ss << salt;
@@ -174,7 +182,7 @@ bool CBlockTreeDB::ReadAddrIndex(uint160 addrid, std::vector<CExtDiskTxPos> &lis
     }
     iter->Seek(make_pair('a', lookupid));
     while (iter->Valid()) {
-        std::pair<std::pair<char, uint64>, CExtDiskTxPos> key;
+        std::pair<std::pair<char, uint64_t>, CExtDiskTxPos> key;
         if (iter->GetKey(key) && key.first.first == 'a' && key.first.second == lookupid) {
             list.push_back(key.second);
         } else {
@@ -197,6 +205,9 @@ bool CBlockTreeDB::AddAddrIndex(const std::vector<std::pair<uint160, CExtDiskTxP
     return WriteBatch(batch);
 }
 
+
+
+
 bool CBlockTreeDB::WriteFlag(const std::string &name, bool fValue) {
     return Write(std::make_pair('F', name), fValue ? '1' : '0');
 }
@@ -211,6 +222,7 @@ bool CBlockTreeDB::ReadFlag(const std::string &name, bool &fValue) {
 
 bool CBlockTreeDB::LoadBlockIndexGuts()
 {
+
     CLevelDBIterator *pcursor = NewIterator();
 
     pcursor->Seek(make_pair('b', uint256(0)));
@@ -236,6 +248,10 @@ bool CBlockTreeDB::LoadBlockIndexGuts()
                 pindexNew->nNonce         = diskindex.nNonce;
                 pindexNew->nStatus        = diskindex.nStatus;
                 pindexNew->nTx            = diskindex.nTx;
+
+                // Watch for genesis block
+                //if (pindexGenesisBlock == NULL && diskindex.GetBlockHash() == Params().HashGenesisBlock())
+                //    pindexGenesisBlock = pindexNew;
 
                 if (!pindexNew->CheckIndex())
                     return error("LoadBlockIndex() : CheckIndex failed: %s", pindexNew->ToString().c_str());
