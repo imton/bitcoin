@@ -44,6 +44,26 @@ bool CBasicKeyStore::HaveCScript(const CScriptID& hash) const
     return mapScripts.count(hash) > 0;
 }
 
+
+
+
+bool CBasicKeyStore::AddWatchOnly(const CTxDestination &dest)
+{
+    LOCK(cs_KeyStore);
+    setWatchOnly.insert(dest);
+    return true;
+}
+
+bool CBasicKeyStore::HaveWatchOnly(const CTxDestination &dest) const
+{
+    LOCK(cs_KeyStore);
+    return setWatchOnly.count(dest) > 0;
+}
+
+
+
+
+
 bool CBasicKeyStore::GetCScript(const CScriptID &hash, CScript& redeemScriptOut) const
 {
     LOCK(cs_KeyStore);

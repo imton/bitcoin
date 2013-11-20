@@ -8,6 +8,8 @@
 #include "db.h"
 #include "key.h"
 
+#include "base58.h"
+
 #include <list>
 #include <stdint.h>
 #include <string>
@@ -78,6 +80,14 @@ private:
     CWalletDB(const CWalletDB&);
     void operator=(const CWalletDB&);
 public:
+
+
+    bool WriteWatchOnly(const CTxDestination &dest)
+    {
+        nWalletDBUpdated++;
+        return Write(std::make_pair(std::string("watch"), CBitcoinAddress(dest).ToString()), '1');
+    }
+
     bool WriteName(const std::string& strAddress, const std::string& strName);
     bool EraseName(const std::string& strAddress);
 
